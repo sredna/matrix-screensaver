@@ -14,9 +14,11 @@ Message message;
 
 TCHAR szAppName[] = _T("Matrix Screensaver");
 
-HINSTANCE hInst;
+#ifndef _WIN64
+UINT g_W9xPwdGracePeriodEndTime = 0;
+#endif
 
-RECT ScreenSize;
+HINSTANCE hInst;
 
 HPALETTE hPalette;
 HDC hdcSymbols;
@@ -26,7 +28,7 @@ HBITMAP hSymbolBitmap;
 int dispx, dispy;
 int maxrows, maxcols;
 int numrows, numcols;
-int xChar, yChar;
+int xChar = 14, yChar = 14;
 
 HFONT hfont;
 
@@ -269,7 +271,7 @@ void Matrix::jjrandomise()
 	}
 }
 
-void InitMatrix(HWND hwnd)
+void InitMatrix(HWND hwnd, BOOL IsPreview)
 {
 	//make a matrix!
 	matrix = new Matrix[maxcols];// { maxrows };
@@ -279,16 +281,37 @@ void InitMatrix(HWND hwnd)
 
 	//Start the matrix
 	//Matrix speed 1-10. Higher values should produce shorter timer delays.
-	SetTimer(hwnd, 0xDeadBeef, MatrixTimerDelay(), 0);
+	UINT speed = MatrixTimerDelay();
+	if (IsPreview)
+		speed *= 2; // The preview window is so small so it should run slower (we don't scale the symbols)
+	SetTimer(hwnd, 0xDeadBeef, speed, 0);
 }
 
-int Normal(int iCmdShow)
+static SIZE GetFullscreenSize()
+{
+	UINT w = GetSystemMetrics(SM_CXSCREEN), h = GetSystemMetrics(SM_CYSCREEN);
+	SIZE size = { w, h };
+	return size;
+}
+
+static void CalculateMaxRowsAndColumns(const SIZE *pPreview = NULL)
+{
+	SIZE size = pPreview ? *pPreview : GetFullscreenSize();
+	maxcols = size.cx / xChar;
+	maxrows = size.cy / yChar + 1;	
+}
+
+int Normal(int iCmdShow, HWND hWndParent = NULL)
 {
 	HWND	hwnd;
 	MSG	msg;
 	WNDCLASS	wndclass;
-	DWORD exStyle, style;
-	HCURSOR hcurs;
+	DWORD style   = WS_OVERLAPPEDWINDOW | WS_CLIPCHILDREN;
+	DWORD exStyle = WS_EX_CLIENTEDGE;
+	HCURSOR hcurs = NULL;
+	RECT r;
+	HWND hPreview = iCmdShow == SW_SHOWNA ? hWndParent : NULL;
+	int x = CW_USEDEFAULT, y = CW_USEDEFAULT, w = CW_USEDEFAULT, h = CW_USEDEFAULT;
 
 	if(iCmdShow == SW_MAXIMIZE)
 	{
@@ -296,12 +319,18 @@ int Normal(int iCmdShow)
 		style   = WS_POPUP | WS_VISIBLE;
 		hcurs   = LoadCursor(hInst, MAKEINTRESOURCE(IDC_BLANKCURSOR));
 	}
-	else
+	else if(hPreview)
 	{
-		exStyle = WS_EX_CLIENTEDGE;
-		style   = WS_OVERLAPPEDWINDOW | WS_CLIPCHILDREN;
-		hcurs   = LoadCursor(NULL, IDC_ARROW);
+		exStyle = WS_EX_NOACTIVATE;
+		style = WS_CHILD | WS_VISIBLE;
+		GetClientRect(hPreview, &r);
+		x = y = 0;
+		w = r.right;
+		h = r.bottom;
+		SIZE size = { w, h };
+		CalculateMaxRowsAndColumns(&size);
 	}
+
 	//Window class for the main application parent window
 	wndclass.style			= 0;//CS_HREDRAW | CS_VREDRAW;
 	wndclass.lpfnWndProc	= WndProc;
@@ -309,7 +338,7 @@ int Normal(int iCmdShow)
 	wndclass.cbWndExtra		= 0;
 	wndclass.hInstance		= hInst;
 	wndclass.hIcon			= LoadIcon(hInst, MAKEINTRESOURCE(IDI_ICON1));
-	wndclass.hCursor		= hcurs;
+	wndclass.hCursor		= hcurs ? hcurs : LoadCursor(NULL, IDC_ARROW);
 	wndclass.hbrBackground	= (HBRUSH)GetStockObject(BLACK_BRUSH);// NULL;
 	wndclass.lpszMenuName	= 0;
 	wndclass.lpszClassName	= szAppName;
@@ -321,15 +350,15 @@ int Normal(int iCmdShow)
 	hwnd = CreateWindowEx(exStyle,
 		szAppName,				// window class name
 		szAppName,				// window caption
-		style,	// window style
-		CW_USEDEFAULT,			// initial x position
-		CW_USEDEFAULT,			// initial y position
-		CW_USEDEFAULT,			// initial x size
-		CW_USEDEFAULT,			// initial y size
-		NULL,					// parent window handle
+		style,					// window style
+		x,						// initial x position
+		y,						// initial y position
+		w,						// initial x size
+		h,						// initial y size
+		hWndParent,				// parent window handle
 		NULL,					// use window class menu
 		hInst,					// program instance handle
-		NULL);					// creation parameters
+		(void*)hPreview);		// creation parameters
 
 	ShowWindow(hwnd, iCmdShow);
 	UpdateWindow(hwnd);
@@ -349,17 +378,31 @@ int ScreenSave(void)
 {
 	UINT nPreviousState;
 	fScreenSaving = true;
+
+#ifndef _WIN64
+	if(!IsNT())
+	{
+		LPCTSTR w9xpluspath = _T("Software\\Microsoft\\Windows\\CurrentVersion\\Screen Savers");
+		UINT Grace = GetRegInt(HKEY_CURRENT_USER, w9xpluspath, "Password Delay", 5);
+		g_W9xPwdGracePeriodEndTime = GetTickCount() + (Grace * 1000);
+	}
+#endif
 	
 	SystemParametersInfo(SPI_SETSCREENSAVERRUNNING, TRUE, &nPreviousState, 0);
 	
 	Normal(SW_MAXIMIZE);
 
 	SystemParametersInfo(SPI_SETSCREENSAVERRUNNING, FALSE, &nPreviousState, 0);
-	
 
 	return 0;
 }
 
+static int Preview(HWND hWndParent)
+{
+	if(IsWindow(hWndParent))
+		Normal(SW_SHOWNA, hWndParent);
+	return 0;
+}
 
 BOOL GetCommandLineOption(PSTR szCmdLine, int *chOption, HWND *hwndParent)
 {
@@ -410,12 +453,7 @@ int WINAPI WinMain (HINSTANCE hInstance, HINSTANCE hPrevInstance, PSTR szCmdLine
 	}
 
 	//see how big the screen is
-	SetRect(&ScreenSize, 0, 0, GetSystemMetrics(SM_CXSCREEN), GetSystemMetrics(SM_CYSCREEN));
-
-	xChar = 14;
-	yChar = 14;
-	maxcols = ScreenSize.right / xChar;
-	maxrows = ScreenSize.bottom / yChar + 1;
+	CalculateMaxRowsAndColumns();
 	
 	LoadSettings();
 
@@ -424,7 +462,7 @@ int WINAPI WinMain (HINSTANCE hInstance, HINSTANCE hPrevInstance, PSTR szCmdLine
 	switch(chOption)
 	{
 	case 's':	return ScreenSave();				//screen save
-	case 'p':	return 0;							//preview in small window
+	case 'p':	return Preview(hwndParent);			//preview in small window
 	case 'a':	return ChangePassword(hwndParent);	//ask for password
 	case 'c':	return Configure(hwndParent);		//configuration dialog
 	default:	return Normal(iCmdShow);
@@ -483,7 +521,7 @@ LRESULT CALLBACK WndProc (HWND hwnd, UINT iMsg, WPARAM wParam, LPARAM lParam)
 		InsertMenu(hsysmenu, SC_CLOSE, MF_BYCOMMAND | MF_ENABLED | MF_STRING, MAKEWPARAM(0x2222,0), _T("&Settings..."));
 		InsertMenu(hsysmenu, SC_CLOSE, MF_BYCOMMAND | MF_SEPARATOR, -1, _T(""));
 
-		InitMatrix(hwnd);
+		InitMatrix(hwnd, lParam && ((CREATESTRUCT*)lParam)->lpCreateParams);
 		i = QueryPerformanceFrequency(&freq);
 		
 		if(fScreenSaving)

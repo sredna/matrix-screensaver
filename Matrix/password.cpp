@@ -1,6 +1,10 @@
 #include <windows.h>
 #include "matrix.h"
 
+#ifndef _WIN64
+extern UINT g_W9xPwdGracePeriodEndTime;
+#endif
+
 typedef BOOL (WINAPI *VERIFYSCREENSAVEPWD)(HWND hwnd);
 typedef VOID (WINAPI *PWDCHANGEPASSWORD) (LPCSTR lpcRegkeyname,HWND hwnd,UINT uiReserved1,UINT uiReserved2);
 
@@ -12,7 +16,10 @@ BOOL VerifyPassword(HWND hwnd)
 	// and the system manages passwords. Under '95, we call VerifyScreenSavePwd.
 	// This checks the appropriate registry key and, if necessary,
 	// pops up a verify dialog
-	if (IsNT())
+	if(IsNT())
+		return TRUE;
+
+	if(GetTickCount() < g_W9xPwdGracePeriodEndTime)
 		return TRUE;
 
 	HINSTANCE hpwdcpl;

@@ -18,9 +18,44 @@ extern BOOL RandomizeMessages;
 extern BOOL CyclePalette;
 extern COLORREF MatrixColor;
 
+#ifndef _WIN64
+static int GetRegInt(HKEY hKey, LPCSTR Name, int DefVal)
+{
+	BYTE buffer[MAX_PATH];
+	DWORD cb = sizeof(buffer), type, result = DefVal;
+	if (!RegQueryValueExA(hKey, Name, 0, &type, (BYTE*)buffer, &cb))
+	{
+		if (cb + sizeof(*buffer) <= sizeof(buffer))
+			buffer[cb] = '\0';
+		if (type <= REG_EXPAND_SZ)
+			result = *buffer ? atoi(buffer) : DefVal;
+		else
+			result = *(DWORD*)buffer;
+	}
+	return result;
+}
+
+int GetRegInt(HKEY hKey, LPCTSTR SubKey, LPCSTR Name, int DefVal)
+{
+	HKEY hCloseKey = NULL;
+	if (SubKey)
+	{
+		if (RegOpenKeyEx(hKey, SubKey, 0, KEY_READ, &hCloseKey) != ERROR_SUCCESS)
+			return DefVal;
+		hKey = hCloseKey;
+	}
+
+	const int result = GetRegInt(hKey, Name, DefVal);
+
+	if (hCloseKey)
+		RegCloseKey(hCloseKey);
+	return result;
+}
+#endif
+
 void LoadSettings()
 {
-	HKEY hkey;
+	HKEY hkey = NULL;
 	LONG value;
 	ULONG len;
 	TCHAR hugechar[4096];

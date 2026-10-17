@@ -12,6 +12,10 @@ extern int xChar, yChar;
 #define IsNT() ( sizeof(void*) > 4 || (int)GetVersion() >= 0 )
 #endif
 
+#ifndef _WIN64
+int GetRegInt(HKEY hKey, LPCTSTR SubKey, LPCSTR Name, int DefVal);
+#endif
+
 #define DENSITY_MIN 5
 #define DENSITY_MAX 50
 
@@ -70,8 +74,6 @@ struct Matrix
 	void jjrandomise();
 
 };
-
-
 
 
 #endif
