@@ -57,16 +57,24 @@ void DeInitMessage(void)
 
 void Message::HideMessage()
 {
+#ifdef NOCRT
+	ZeroMemory(visible, sizeof(visible));
+#else
 	for(int x = 0; x < MSGWIDTH; x++)
 		for(int y = 0; y < MSGHEIGHT; y++)
 			visible[x][y] = false;
+#endif
 }
 
 void Message::ClearMessage()
 {
+#ifdef NOCRT
+	ZeroMemory(bitmap, sizeof(visible));
+#else
 	for(int x = 0; x < MSGWIDTH; x++)
 		for(int y = 0; y < MSGHEIGHT; y++)
 			bitmap[x][y] = false;
+#endif
 }
 
 void Message::SetMessage(TCHAR *newmsg, int PointSize)

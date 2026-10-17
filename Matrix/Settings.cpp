@@ -95,7 +95,7 @@ void LoadSettings()
 void SaveSettings()
 {
 	HKEY hkey;
-	TCHAR hugechar[4096] = _T("");
+	TCHAR hugechar[4096];
 	TCHAR empty[] = _T("");
 	TCHAR *msgptr = hugechar;
 	int totallen = 0;
@@ -133,15 +133,15 @@ void SaveSettings()
 
 	RegSetValueEx(hkey, _T("FontName"), 0, REG_SZ, (BYTE *)szFontName, lstrlen(szFontName)*sizeof(TCHAR));
 
+	*msgptr = '\0';
 	for(int i = 0; i < nNumMessages; i++)
 	{
 		int len = lstrlen(szMessages[i]);
 		lstrcat(msgptr, szMessages[i]);
 		totallen += len + 1;
 		msgptr += len + 1;
+		*msgptr = '\0';
 	}
-
-	*msgptr = '\0';
 	totallen++;
 
 	RegSetValueEx(hkey, _T("Messages"), 0, REG_MULTI_SZ, (BYTE*)hugechar, totallen*sizeof(TCHAR));

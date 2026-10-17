@@ -364,17 +364,17 @@ INT_PTR CALLBACK configdlgproc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lPara
 
 int Configure(HWND hwndParent)
 {
-	INITCOMMONCONTROLSEX icc;
-	HANDLE hold;
-
-	icc.dwICC = ICC_UPDOWN_CLASS | ICC_BAR_CLASSES;
-	icc.dwSize = sizeof icc;
+	HGDIOBJ hold;
+#ifdef _WIN64
+	INITCOMMONCONTROLSEX icc = { sizeof(icc), ICC_UPDOWN_CLASS | ICC_BAR_CLASSES };
+	InitCommonControlsEx(&icc);
+#else
+	InitCommonControls();
+#endif
 
 	hdcPrev = CreateCompatibleDC(NULL);
 	hbmPrev = CreateCompatibleBitmap(hdcPrev, maxcols, maxrows);
 	hold    = SelectObject(hdcPrev, hbmPrev);
-
-	InitCommonControlsEx(&icc);
 
 	if(hwndParent == NULL)
 		hwndParent = GetForegroundWindow();
